@@ -49,13 +49,14 @@ export default function App() {
     setError(null);
 
     try {
-      // Step 1: Research Trends
       const result = await researchCurrentTrends();
+      if (result.trends.length === 0) {
+        throw new Error("Could not identify specific trends at this moment.");
+      }
       setTrends(result.trends);
       setSources(result.sources);
       setAppState(AppState.VISUALIZING);
 
-      // Step 2: Generate Visualizations for each trend
       const updatedTrends = [...result.trends];
       for (let i = 0; i < updatedTrends.length; i++) {
         try {
@@ -68,9 +69,9 @@ export default function App() {
         }
       }
       setAppState(AppState.COMPLETED);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Market analysis failed. Please check your connection and try again.");
+      setError(err.message || "Market analysis failed. Please check your connection and try again.");
       setAppState(AppState.IDLE);
     }
   };
@@ -99,12 +100,12 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           {/* Upload Sidebar */}
           <div className="lg:col-span-4">
-            <div className="bg-slate-900 rounded-3xl p-8 border border-white/5 sticky top-24 shadow-2xl">
+            <div className="bg-slate-900 rounded-3xl p-6 border border-white/5 sticky top-24 shadow-2xl">
               <h3 className="text-xl font-bold text-white mb-6">1. Upload Product</h3>
-              <div className="relative group overflow-hidden rounded-2xl border-2 border-dashed border-slate-700 hover:border-indigo-500/50 transition-all aspect-square bg-slate-800/50 flex flex-col items-center justify-center p-4">
+              <div className="relative group overflow-hidden rounded-2xl border-2 border-dashed border-slate-700 hover:border-indigo-500/50 transition-all min-h-[250px] bg-slate-800/50 flex flex-col items-center justify-center p-4">
                 <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 z-10 cursor-pointer" />
                 {originalImage ? (
-                  <img src={originalImage} alt="Input" className="w-full h-full object-contain" />
+                  <img src={originalImage} alt="Input" className="max-h-[300px] w-full object-contain rounded-lg shadow-lg" />
                 ) : (
                   <div className="text-center">
                     <div className="w-16 h-16 bg-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
@@ -138,7 +139,7 @@ export default function App() {
                   )}
                 </button>
               )}
-              {error && <p className="text-red-400 text-xs mt-4 text-center">{error}</p>}
+              {error && <p className="text-red-400 text-sm mt-4 text-center bg-red-400/10 p-3 rounded-xl border border-red-400/20">{error}</p>}
             </div>
           </div>
 
@@ -150,10 +151,18 @@ export default function App() {
               </div>
             )}
 
+            {appState === AppState.RESEARCHING && (
+               <div className="bg-slate-900/50 rounded-[2.5rem] border border-white/5 p-12 text-center space-y-6 animate-pulse">
+                  <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto" />
+                  <h3 className="text-2xl font-bold text-white">Scanning Global Trends...</h3>
+                  <p className="text-slate-400 max-w-md mx-auto">We're using Google Search to identify the most impactful visual aesthetics from the last 30 days.</p>
+               </div>
+            )}
+
             {trends.map((trend, idx) => (
-              <div key={trend.id} className="bg-slate-900 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-700 delay-150">
+              <div key={trend.id} className="bg-slate-900 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-700">
                 <div className="grid grid-cols-1 md:grid-cols-2">
-                  <div className="p-8 md:p-12 space-y-6">
+                  <div className="p-8 md:p-12 space-y-6 flex flex-col justify-center">
                     <div>
                       <span className="text-indigo-400 text-xs font-black uppercase tracking-widest block mb-2">Trend Analysis 0{idx + 1}</span>
                       <h3 className="text-3xl font-black text-white leading-tight">{trend.title}</h3>
@@ -166,32 +175,39 @@ export default function App() {
                       </p>
                     </div>
 
-                    <div className="pt-4 border-t border-white/5">
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Grounding Context</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {sources.slice(0, 3).map((source, sIdx) => (
-                          <a 
-                            key={sIdx}
-                            href={source.uri} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.827a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                            </svg>
-                            {source.title.length > 20 ? source.title.substring(0, 20) + '...' : source.title}
-                          </a>
-                        ))}
+                    {sources.length > 0 && (
+                      <div className="pt-4 border-t border-white/5">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Verification Sources</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {sources.slice(0, 3).map((source, sIdx) => (
+                            <a 
+                              key={sIdx}
+                              href={source.uri} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.827a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                              </svg>
+                              {source.title.length > 20 ? source.title.substring(0, 20) + '...' : source.title}
+                            </a>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
-                  <div className="bg-slate-800 relative group overflow-hidden flex items-center justify-center min-h-[400px]">
-                    {!trend.imageUrl ? (
-                      <div className="flex flex-col items-center gap-4">
+                  <div className="bg-slate-800 relative group overflow-hidden flex items-center justify-center min-h-[450px]">
+                    {trend.loading && !trend.imageUrl ? (
+                      <div className="flex flex-col items-center gap-4 p-8 text-center">
                         <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-                        <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Rendering Trend Aesthetic</p>
+                        <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Rendering Trend Aesthetic...</p>
+                        <p className="text-[10px] text-slate-500 italic max-w-xs">Applying: {trend.visualPrompt.substring(0, 100)}...</p>
+                      </div>
+                    ) : trend.error ? (
+                      <div className="p-8 text-center">
+                        <p className="text-red-400 text-sm">{trend.error}</p>
                       </div>
                     ) : (
                       <>

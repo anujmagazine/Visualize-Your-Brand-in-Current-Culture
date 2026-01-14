@@ -6,16 +6,17 @@ const RESEARCH_MODEL = 'gemini-3-pro-preview';
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 
 export const researchCurrentTrends = async (): Promise<ResearchResult> => {
-  // Always use process.env.API_KEY directly as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const prompt = `Identify exactly 3 distinct visual marketing trends or aesthetics that have become popular in the global creative industry within the last 30 days (e.g., specific color palettes, photography styles, or graphic design movements). 
-  For each trend, provide:
-  1. A short catchy TITLE.
-  2. A "STORY": Why it is popular right now and its cultural impact (2-3 sentences).
-  3. A "PROMPT": A highly descriptive visual prompt that describes how a product would be staged in this style.
-  
-  Format the response clearly with labels TREND 1, TREND 2, TREND 3.`;
+  const prompt = `Research and identify exactly 3 distinct visual marketing trends or aesthetics that have surged in popularity in the global creative industry (social media, design, advertising) within the last 30 days.
+
+For each trend, you MUST follow this EXACT format:
+
+TREND [Number]: [Catchy Short Title]
+STORY: [2-3 sentences explaining why it's popular and its cultural driver]
+PROMPT: [A highly detailed 1-sentence visual description for generating an image of a product in this style]
+
+Ensure you provide exactly 3 trends. Use Google Search to find current data from late 2025/early 2026.`;
 
   const response = await ai.models.generateContent({
     model: RESEARCH_MODEL,
@@ -33,21 +34,33 @@ export const researchCurrentTrends = async (): Promise<ResearchResult> => {
       uri: chunk.web?.uri || ''
     })) || [];
 
-  // Basic parsing of the text into 3 trends
-  const trendBlocks = text.split(/TREND \d:?/i).filter(b => b.trim().length > 50).slice(0, 3);
+  // Split by Trend headers
+  const trendBlocks = text.split(/TREND \d:?/i).filter(block => block.toLowerCase().includes('story') && block.toLowerCase().includes('prompt'));
   
-  const trends: Trend[] = trendBlocks.map((block, index) => {
+  const trends: Trend[] = trendBlocks.slice(0, 3).map((block, index) => {
     const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const title = lines[0].replace(/Title:?/i, '').trim();
-    const story = lines.find(l => l.toLowerCase().includes('story'))?.replace(/Story:?/i, '').trim() || "Explanation of popularity...";
-    const visualPrompt = lines.find(l => l.toLowerCase().includes('prompt'))?.replace(/Prompt:?/i, '').trim() || "Visual description...";
+    
+    // First non-empty line after the split is usually the Title
+    const title = lines[0].replace(/^[ \t*#-]+/, '').trim();
+    
+    // Find Story and Prompt lines, handling potential markdown bolding (**Story:**)
+    const storyLine = lines.find(l => /^(?:\*\*|\*|#|\s)*story:?/i.test(l));
+    const promptLine = lines.find(l => /^(?:\*\*|\*|#|\s)*prompt:?/i.test(l));
+
+    const story = storyLine 
+      ? storyLine.replace(/^(?:\*\*|\*|#|\s)*story:?\s*/i, '').trim() 
+      : "The story for this trend is currently evolving in the market.";
+      
+    const visualPrompt = promptLine 
+      ? promptLine.replace(/^(?:\*\*|\*|#|\s)*prompt:?\s*/i, '').trim() 
+      : "A professional studio shot in a modern aesthetic.";
 
     return {
       id: `trend-${index}`,
-      title,
+      title: title.length > 60 ? title.substring(0, 60) + "..." : title,
       story,
       visualPrompt,
-      loading: false
+      loading: true
     };
   });
 
@@ -58,11 +71,14 @@ export const generateTrendVisualization = async (
   base64Image: string,
   visualPrompt: string
 ): Promise<string> => {
-  // Always use process.env.API_KEY directly as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const prompt = `Apply this trending aesthetic to the product in the image: ${visualPrompt}. 
-  CRITICAL: The product itself (labels, logo, colors) must remain 100% consistent and untouched. Change only the environment, lighting, and staging style to match the trend.`;
+  const prompt = `Task: Re-visualize the product in the provided image using this trending aesthetic: ${visualPrompt}. 
+  
+  STRICT CONSTRAINTS:
+  1. The product (its shape, labels, text, and original colors) MUST remain identical and clearly legible.
+  2. Do NOT change the branding.
+  3. Change the environment, lighting, background, and overall photography style to match the requested trend.`;
 
   const response = await ai.models.generateContent({
     model: IMAGE_MODEL,
