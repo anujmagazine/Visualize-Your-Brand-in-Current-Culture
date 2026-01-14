@@ -1,0 +1,7 @@
+{
+  "name": "BrandVision Pro",
+  "description": "Dynamic market trend analysis and product visualization. Discover what's trending in marketing right now and see your brand adapted to live aesthetics.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
