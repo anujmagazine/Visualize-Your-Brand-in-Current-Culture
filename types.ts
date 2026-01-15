@@ -17,10 +17,12 @@ export interface Trend {
 export interface ResearchResult {
   trends: Trend[];
   sources: GroundingSource[];
+  productCategory: string;
 }
 
 export enum AppState {
   IDLE = 'IDLE',
+  ANALYZING_PRODUCT = 'ANALYZING_PRODUCT',
   RESEARCHING = 'RESEARCHING',
   VISUALIZING = 'VISUALIZING',
   COMPLETED = 'COMPLETED'

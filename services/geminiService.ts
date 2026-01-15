@@ -3,20 +3,44 @@ import { GoogleGenAI } from "@google/genai";
 import { ResearchResult, Trend, GroundingSource } from "../types";
 
 const RESEARCH_MODEL = 'gemini-3-pro-preview';
+const ANALYSIS_MODEL = 'gemini-3-flash-preview';
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 
-export const researchCurrentTrends = async (): Promise<ResearchResult> => {
+/**
+ * Identifies what the product is to provide context for the trend research.
+ */
+export const identifyProductCategory = async (base64Image: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: ANALYSIS_MODEL,
+    contents: {
+      parts: [
+        {
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64Image.split(',')[1] || base64Image,
+          },
+        },
+        { text: "Identify this product category in 1-3 words (e.g., 'Coffee Beans', 'Adventure Novel', 'Skincare Serum', 'Electric Car'). Be specific." },
+      ],
+    },
+  });
+
+  return response.text?.trim() || "Product";
+};
+
+export const researchCurrentTrends = async (productCategory: string): Promise<ResearchResult> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const prompt = `Research and identify exactly 3 distinct visual marketing trends or aesthetics that have surged in popularity in the global creative industry (social media, design, advertising) within the last 30 days.
+  const prompt = `Research and identify exactly 3 distinct visual marketing trends or aesthetics that have surged in popularity SPECIFICALLY for "${productCategory}" marketing and promotions within the last 30 days.
 
 For each trend, you MUST follow this EXACT format:
 
 TREND [Number]: [Catchy Short Title]
-STORY: [2-3 sentences explaining why it's popular and its cultural driver]
-PROMPT: [A highly detailed 1-sentence visual description for generating an image of a product in this style]
+STORY: [2-3 sentences explaining why it's popular in the ${productCategory} market and its cultural driver]
+PROMPT: [A highly detailed 1-sentence visual description for generating a marketing photo for ${productCategory} in this style]
 
-Ensure you provide exactly 3 trends. Use Google Search to find current data from late 2025/early 2026.`;
+Ensure you provide exactly 3 trends. Use Google Search to find current data from late 2025/early 2026. Focus on how brands in the ${productCategory} space are currently positioning themselves.`;
 
   const response = await ai.models.generateContent({
     model: RESEARCH_MODEL,
@@ -49,11 +73,11 @@ Ensure you provide exactly 3 trends. Use Google Search to find current data from
 
     const story = storyLine 
       ? storyLine.replace(/^(?:\*\*|\*|#|\s)*story:?\s*/i, '').trim() 
-      : "The story for this trend is currently evolving in the market.";
+      : `This trend is currently redefining ${productCategory} branding.`;
       
     const visualPrompt = promptLine 
       ? promptLine.replace(/^(?:\*\*|\*|#|\s)*prompt:?\s*/i, '').trim() 
-      : "A professional studio shot in a modern aesthetic.";
+      : `A professional ${productCategory} marketing shot in a modern aesthetic.`;
 
     return {
       id: `trend-${index}`,
@@ -64,7 +88,7 @@ Ensure you provide exactly 3 trends. Use Google Search to find current data from
     };
   });
 
-  return { trends, sources };
+  return { trends, sources, productCategory };
 };
 
 export const generateTrendVisualization = async (

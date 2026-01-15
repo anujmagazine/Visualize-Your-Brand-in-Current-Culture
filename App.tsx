@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { AppState, Trend, GroundingSource } from './types';
-import { researchCurrentTrends, generateTrendVisualization } from './services/geminiService';
+import { identifyProductCategory, researchCurrentTrends, generateTrendVisualization } from './services/geminiService';
 
 const Header = () => (
   <header className="bg-slate-900 border-b border-white/10 sticky top-0 z-50">
@@ -26,6 +26,7 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [trends, setTrends] = useState<Trend[]>([]);
   const [sources, setSources] = useState<GroundingSource[]>([]);
+  const [identifiedCategory, setIdentifiedCategory] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,6 +37,7 @@ export default function App() {
         setOriginalImage(event.target?.result as string);
         setAppState(AppState.IDLE);
         setTrends([]);
+        setIdentifiedCategory('');
         setError(null);
       };
       reader.readAsDataURL(file);
@@ -45,18 +47,24 @@ export default function App() {
   const startAnalysis = async () => {
     if (!originalImage) return;
     
-    setAppState(AppState.RESEARCHING);
     setError(null);
-
     try {
-      const result = await researchCurrentTrends();
+      // Step 1: Identify product
+      setAppState(AppState.ANALYZING_PRODUCT);
+      const category = await identifyProductCategory(originalImage);
+      setIdentifiedCategory(category);
+
+      // Step 2: Research Trends for this category
+      setAppState(AppState.RESEARCHING);
+      const result = await researchCurrentTrends(category);
       if (result.trends.length === 0) {
         throw new Error("Could not identify specific trends at this moment.");
       }
       setTrends(result.trends);
       setSources(result.sources);
+      
+      // Step 3: Visualize
       setAppState(AppState.VISUALIZING);
-
       const updatedTrends = [...result.trends];
       for (let i = 0; i < updatedTrends.length; i++) {
         try {
@@ -93,7 +101,7 @@ export default function App() {
             Visualize Your Brand in <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-400">Current Culture</span>
           </h2>
           <p className="text-slate-400 text-center max-w-2xl text-lg">
-            Don't just mock up. Research what's winning in the last 30 days and see your product perfectly staged in those trending aesthetics.
+            Research what's winning in your specific category over the last 30 days and see your product perfectly staged.
           </p>
         </div>
 
@@ -126,7 +134,7 @@ export default function App() {
                 >
                   {appState === AppState.IDLE ? (
                     <>
-                      Discover & Visualize
+                      Start Smart Analysis
                       <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                       </svg>
@@ -134,12 +142,20 @@ export default function App() {
                   ) : (
                     <>
                       <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {appState === AppState.RESEARCHING ? 'Researching Trends...' : 'Applying Aesthetics...'}
+                      {appState === AppState.ANALYZING_PRODUCT ? 'Analyzing Product...' : 
+                       appState === AppState.RESEARCHING ? 'Researching Trends...' : 'Applying Aesthetics...'}
                     </>
                   )}
                 </button>
               )}
               {error && <p className="text-red-400 text-sm mt-4 text-center bg-red-400/10 p-3 rounded-xl border border-red-400/20">{error}</p>}
+              
+              {identifiedCategory && (
+                <div className="mt-6 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20">
+                  <span className="text-[10px] text-indigo-400 uppercase tracking-widest block mb-1">Detected Category</span>
+                  <p className="text-white font-bold">{identifiedCategory}</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -147,15 +163,19 @@ export default function App() {
           <div className="lg:col-span-8 space-y-12">
             {appState === AppState.IDLE && !originalImage && (
               <div className="h-[500px] rounded-3xl border-2 border-dashed border-slate-800 flex flex-col items-center justify-center text-slate-600">
-                <p className="text-lg font-medium">Visualization results will appear after research</p>
+                <p className="text-lg font-medium">Visualization results will appear after category-specific research</p>
               </div>
             )}
 
-            {appState === AppState.RESEARCHING && (
+            {(appState === AppState.RESEARCHING || appState === AppState.ANALYZING_PRODUCT) && (
                <div className="bg-slate-900/50 rounded-[2.5rem] border border-white/5 p-12 text-center space-y-6 animate-pulse">
                   <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto" />
-                  <h3 className="text-2xl font-bold text-white">Scanning Global Trends...</h3>
-                  <p className="text-slate-400 max-w-md mx-auto">We're using Google Search to identify the most impactful visual aesthetics from the last 30 days.</p>
+                  <h3 className="text-2xl font-bold text-white">
+                    {appState === AppState.ANALYZING_PRODUCT ? 'Identifying Your Product...' : `Finding Trending ${identifiedCategory} Aesthetics...`}
+                  </h3>
+                  <p className="text-slate-400 max-w-md mx-auto">
+                    We're tailoring the research to your specific niche to ensure high-value marketing insights.
+                  </p>
                </div>
             )}
 
@@ -202,7 +222,7 @@ export default function App() {
                     {trend.loading && !trend.imageUrl ? (
                       <div className="flex flex-col items-center gap-4 p-8 text-center">
                         <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-                        <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Rendering Trend Aesthetic...</p>
+                        <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Rendering Strategic Aesthetic...</p>
                         <p className="text-[10px] text-slate-500 italic max-w-xs">Applying: {trend.visualPrompt.substring(0, 100)}...</p>
                       </div>
                     ) : trend.error ? (
